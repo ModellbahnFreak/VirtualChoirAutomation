@@ -13,8 +13,17 @@ const gridSizeX = document.querySelector("#gridSizeX");
 const gridSizeY = document.querySelector("#gridSizeY");
 const outResolution = document.querySelector("#outResolution");
 const customResolution = document.querySelector("#customResolution");
+const videoNames = document.querySelectorAll(".videoName");
+const video = document.querySelector("#video");
+const frameBw = document.querySelector("#frameBw");
+const frameFw = document.querySelector("#frameFw");
+const vidProgress = document.querySelector("#vidProgress");
+const btnPause = document.querySelector("#btnPause");
+const btnPlay = document.querySelector("#btnPlay");
+const btnSetSyncPoint = document.querySelector("#setSyncPoint");
 
 var vidSync;
+var numScrub = 0;
 
 function init() {
     noscript.style.display = "none";
@@ -30,6 +39,56 @@ function init() {
     gridSizeX.addEventListener("change", updateGridSize);
     gridSizeY.addEventListener("change", updateGridSize);
     outResolution.addEventListener("change", updateOutResolution);
+    videoList.addEventListener("change", changeVideo);
+    frameBw.addEventListener("click", () => {
+        scrub(-1);
+    });
+    frameFw.addEventListener("click", () => {
+        scrub(1);
+    });
+    const scrubKeyDown = (e) => {
+        switch (e.key) {
+            case "ArrowRight":
+                scrub(1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            case "ArrowLeft":
+                scrub(-1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            case " ":
+                if (video.paused) {
+                    video.play()
+                } else {
+                    video.pause();
+                }
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+        }
+    };
+    btnPlay.addEventListener("click", (e) => {
+        video.play();
+    });
+    btnPause.addEventListener("click", (e) => {
+        video.pause();
+    });
+    vidProgress.addEventListener("input", () => {
+        video.currentTime = video.duration * parseFloat(vidProgress.value) / 100;
+    });
+    const updateSlider = (e) => {
+        vidProgress.value = video.currentTime / video.duration * 100;
+    };
+    video.addEventListener("timeupdate", updateSlider);
+    video.addEventListener("canplay", updateSlider);
+    video.addEventListener("playing", updateSlider);
+    video.addEventListener("pause", updateSlider);
+    document.body.addEventListener("keydown", scrubKeyDown);
+    document.querySelector("#clickCatcher").addEventListener("keydown", scrubKeyDown);
+    btnSetSyncPoint.addEventListener("click", setSyncPoint)
+
     loadVidSync();
 }
 
@@ -39,7 +98,7 @@ function loadVidSync() {
         if (xhttp.status == 200) {
             vidSnycUpdate(xhttp.responseText);
         } else {
-            showAlrert("Couldn't load sync data: " + xhttp.responseText);
+            showAlert("Couldn't load sync data: " + xhttp.responseText);
         }
     }
     xhttp.open("GET", "/api/vidSync.json");
@@ -47,6 +106,11 @@ function loadVidSync() {
 }
 
 function vidSnycUpdate(data) {
+    var oldSelected;
+    const oldVoiceNum = parseInt(voiceList.value);
+    if (voiceList.value && vidSync.voices[oldVoiceNum]) {
+        oldSelected = vidSync.voices[oldVoiceNum].name;
+    }
     while (voiceList.firstElementChild) {
         voiceList.firstElementChild.remove();
     }
@@ -79,10 +143,11 @@ function vidSnycUpdate(data) {
         const voiceGroup = document.createElement("option");
         voiceGroup.value = voiceNum;
         voiceGroup.innerText = voice.name;
-        if (voiceNum == 0) {
-            voiceGroup.selected = true;
-        }
         voiceList.appendChild(voiceGroup);
+        if ((oldSelected && voice.name == oldSelected) || (!oldSelected && voiceNum == 0)) {
+            voiceGroup.selected = true;
+            voiceList.value = voiceNum;
+        }
     }
     changeVoice();
 }
@@ -110,9 +175,58 @@ function changeVoice() {
     }
 }
 
+function scrub(amount) {
+    if (video.readyState == 4 || video.readyState == 3) {
+        if (numScrub == 0) {
+            numScrub += amount;
+            const currTime = video.currentTime;
+            var dstTime = 0;
+            if (vidSync.voices[video.voiceNum].videos[video.vidNum].fps) {
+                dstTime = currTime + amount / vidSync.voices[video.voiceNum].videos[video.vidNum].fps
+            } else {
+                dstTime = currTime + amount / 25;
+            }
+            video.currentTime = dstTime;
+            video.play();
+            setTimeout(() => {
+                video.pause();
+                numScrub -= amount;
+                video.currentTime = dstTime;
+                if (numScrub != 0) {
+                    scrub(amount);
+                }
+            }, 80);
+        }
+    } else {
+        console.log("Video not loaded");
+    }
+}
+
+function setSyncPoint() {
+    if ((video.readyState == 4 || video.readyState == 3) && video.paused && isFinite(video.voiceNum) && isFinite(video.vidNum)) {
+        apiRequest("/setSync?" + video.voiceNum + "_" + video.vidNum + "_" + video.currentTime);
+    } else {
+        alert("You must load and pause a video in order to set the sync point");
+    }
+}
+
+function changeVideo() {
+    const parts = videoList.value.split(/\./g);
+    if (parts.length == 2) {
+        const voiceNum = parseInt(parts[0]);
+        const vidNum = parseInt(parts[1]);
+        for (var i = 0; i < videoNames.length; i++) {
+            videoNames[i].innerText = vidSync.voices[voiceNum].videos[vidNum].filename;
+        }
+        video.src = "/videos/" + voiceNum + "/" + vidNum + "?" + Math.floor(Math.random() * 10000);
+        video.voiceNum = voiceNum;
+        video.vidNum = vidNum;
+    }
+}
+
 function addVoice() {
     var name = prompt("Name of new voice");
-    if (name != null) {
+    if (name) {
         var voiceExists = false;
         vidSync.voices.forEach(voice => {
             if (name == voice.name) {
@@ -139,7 +253,31 @@ function remVoice() {
 }
 
 function addVideo() {
+    if (voiceList.value) {
+        var voiceNum = parseInt(voiceList.value);
+        if (isFinite(voiceNum)) {
+            var filename = prompt("Filename of video in folder " + vidSync.basePath + "/" + vidSync.voices[voiceNum].name);
+            if (filename) {
+                var videoExists = false;
+                vidSync.voices[voiceNum].videos.forEach(vid => {
+                    if (filename == vid.filename) {
+                        videoExists = true;
+                    }
+                });
+                if (videoExists) {
+                    if (confirm("A video with the exact same name is already added to this voice. do you really want to add it again?")) {
 
+                    }
+                } else {
+                    apiRequest("/newVideo?" + voiceNum + "." + filename);
+                }
+            }
+        } else {
+            alert("Please select a voice for the video to be added to.");
+        }
+    } else {
+        alert("Please select a voice for the video to be added to.");
+    }
 }
 
 function remVideo() {
@@ -165,15 +303,15 @@ function typeBasePath() {
 
 function updateGridSize() {
     if (gridSizeX.validity.valid && gridSizeY.validity.valid) {
-        gridSizeX.parentElement.classList.add("was-validated");
+        gridSizeX.parentElement.parentElement.classList.remove("was-validated");
         apiRequest("/changeGridSize?" + gridSizeX.value + "x" + gridSizeY.value);
     } else {
-        gridSizeX.parentElement.classList.add("was-validated");
+        gridSizeX.parentElement.parentElement.classList.add("was-validated");
     }
 }
 
 function updateOutResolution() {
-
+    apiRequest("/changeOutResolution?" + outResolution.value);
 }
 
 function apiRequest(url) {
@@ -182,14 +320,14 @@ function apiRequest(url) {
         if (xhttp.status == 200) {
             vidSnycUpdate(xhttp.responseText);
         } else {
-            showAlrert("Couldn't load sync data: " + xhttp.responseText);
+            showAlert("Couldn't load sync data: " + xhttp.responseText);
         }
     }
-    xhttp.open("GET", "/api" + url);
+    xhttp.open("GET", "/api" + encodeURI(url));
     xhttp.send();
 }
 
-function showAlrert(text) {
+function showAlert(text) {
     alertBox.innerHTML = text;
     main.style.display = "none";
     noscript.style.display = "";

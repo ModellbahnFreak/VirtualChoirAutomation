@@ -67,8 +67,31 @@
                 <button class="btn btn-primary mr-3" id="addVideo">Add new video</button>
                 <button class="btn btn-danger mr-3" id="remVideo">Remove selected</button>
             </div>
+            <div class="my-3">
+                <h4>Video <span class="voiceName"></span> - <span class="videoName"></span></h4>
+                <div class="mb-2">
+                    <button class="btn btn-secondary" id="frameBw">&lt;- 1 Frame</button>
+                    <button class="btn btn-secondary" id="btnPlay"><svg class="bi bi-play-fill" width="1em" height="1em"
+                            viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 010 1.393z" />
+                        </svg></button>
+                    <button class="btn btn-secondary" id="btnPause"><svg class="bi bi-pause-fill" width="1em"
+                            height="1em" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z" />
+                        </svg></button>
+                    <button class="btn btn-secondary" id="frameFw">1 Frame -&gt;</button>
+                    <button class="btn btn-success" id="setSyncPoint">Set Sync Point</button>
+                    <input type="range" class="mt-2 form-control-range" value="0" min="0" max="100" id="vidProgress">
+                </div>
+                <div style="position: relative;">
+                    <video id="video" class="img-fluid"></video>
+                    <div id="clickCatcher" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%;">
+                    </div>
+                </div>
+            </div>
         </div>
-        <input type="file">
         <footer class="pt-2 border-top">
             GUI using <a href="https://getbootstrap.com/">Bootstrap</a> (MIT license)<br>
             Server/Main Software: <a href="https://nodejs.org/">NodeJS</a> (<a
