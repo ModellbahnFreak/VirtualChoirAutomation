@@ -22,11 +22,17 @@ class JSONLoader {
     }
 
     save() {
-        fs.writeFile(this.file, JSON.stringify(this.jsonData, null, 4));
+        fs.writeFile(this.file, JSON.stringify(this.jsonData, null, 4), () => {
+            console.log("Updated json file");
+        });
     }
 
     reload() {
         this.jsonData = JSON.parse(fs.readFileSync(this.file));
+    }
+
+    toString() {
+        return JSON.stringify(this.jsonData, null, 4);
     }
 }
 

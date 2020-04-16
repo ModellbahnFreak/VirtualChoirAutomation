@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>VirtalChoirAutomation</title>
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+        integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
+        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="container" id="noscript">
+        <div class="alert alert-danger" id="alert">Please enable Javascript in your browser!</div>
+    </div>
+    <div class="container" id="main" style="display: none;">
+        <div class="my-3">
+            <div class="my-3">
+                <h4>Settings:</h4>
+                <div class="mb-3">
+                    <label for="basePath">Project folder (absolute)</label>
+                    <input type="text" class="form-control" id="basePath" placeholder="Absolute path">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="gridSizeX">Grid width</label>
+                        <input type="number" class="form-control" id="gridSizeX" step="1" min="1"
+                            placeholder="Width of the video grid">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="gridSizeY">Grid height</label>
+                        <input type="number" class="form-control" id="gridSizeY" step="1" min="1"
+                            placeholder="Height of the video grid">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="outResolution">Output video resolution</label>
+                    <select class="form-control" id="outResolution">
+                        <option value="1920x1080">Full HD</option>
+                        <option value="1280x720">HD</option>
+                        <option id="customResolution" style="display: none;" value=""></option>
+                        <option value="none">Audio only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="my-3">
+                <h4>Voices:</h4>
+                <select class="custom-select my-3" size="4" id="voiceList">
+                </select>
+                <button class="btn btn-primary mr-3" id="addVoice">Add new voice</button>
+                <button class="btn btn-danger mr-3" id="remVoice">Remove selected</button>
+            </div>
+            <div class="my-3">
+                <h4>Videos for <span class="voiceName"></span></h4>
+                <select class="custom-select my-3" size="6" id="videoList">
+                </select>
+                <button class="btn btn-primary mr-3" id="addVideo">Add new video</button>
+                <button class="btn btn-danger mr-3" id="remVideo">Remove selected</button>
+            </div>
+        </div>
+        <input type="file">
+        <footer class="pt-2 border-top">
+            GUI using <a href="https://getbootstrap.com/">Bootstrap</a> (MIT license)<br>
+            Server/Main Software: <a href="https://nodejs.org/">NodeJS</a> (<a
+                href="https://github.com/nodejs/node/blob/master/LICENSE">Node.js
+                license</a>) <br>
+            This software uses <a href="http://ffmpeg.org">FFmpeg</a> licensed under the <a
+                href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPLv2.1</a>/<a
+                href="http://www.gnu.org/licenses/old-licenses/gpl-2.0.html">GPL 2</a> and its source can be
+            downloaded
+            <a href="http://www.ffmpeg.org/download.html">here</a>
+        </footer>
+    </div>
+    <script src="logic.js"></script>
+    <script>init();</script>
+</body>
+
+</html>

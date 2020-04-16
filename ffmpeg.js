@@ -1,3 +1,5 @@
+//TODO: Hanlde undefined outResolution (audio only)
+
 module.exports = {
     createVideo: function (vidSync) {
         const inToSyncTime = utils.parseTimestamp(vidSync.inToSyncTime);
@@ -48,13 +50,13 @@ module.exports = {
                 inputFiles.push("-ss");
                 inputFiles.push(utils.timestampToString(startTime));
                 inputFiles.push("-i");
-                inputFiles.push(vid.filename);
+                inputFiles.push(vidSync.basePath + "/" + voice.name + "/" + vid.filename);
                 if (vid.audio) {
                     const audioStartTime = utils.parseTimestamp(vid.audio.syncPoint) - inToSyncTime;
                     audioInputs.push("-ss");
                     audioInputs.push(utils.timestampToString(audioStartTime));
                     audioInputs.push("-i");
-                    audioInputs.push(vid.audio.filename);
+                    audioInputs.push(vidSync.basePath + "/" + voice.name + "/" + vid.audio.filename);
                     audioFilters.push("[" + (numAudios + numVids + 1) + ":a] pan=1c|c0=0.5*c1+0.5*c2 loudnorm [aud" + i + "]");
                     numAudios++;
                 } else {

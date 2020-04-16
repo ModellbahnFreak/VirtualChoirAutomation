@@ -6,6 +6,6 @@ const ffmpeg = require("./ffmpeg");
 const GUI = require("./gui");
 
 const loader = new JSONLoader("./vidSync.json");
-const gui = new GUI(8080);
+const gui = new GUI(8080, loader);
 //ffmpeg.createVideo(loader.data);
 var vidSync = loader.data;
