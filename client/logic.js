@@ -21,9 +21,19 @@ const vidProgress = document.querySelector("#vidProgress");
 const btnPause = document.querySelector("#btnPause");
 const btnPlay = document.querySelector("#btnPlay");
 const btnSetSyncPoint = document.querySelector("#setSyncPoint");
+const btnSetInPoint = document.querySelector("#setInPoint");
+const timestampLabel = document.querySelector("#timestamp");
+const inToSync = document.querySelector("#inToSync");
+const btnGotoSync = document.querySelector("#gotoSync");
+const btnGotoIn = document.querySelector("#gotoIn");
+const btnStop = document.querySelector("#btnStop");
+const btnRenderFull = document.querySelector("#btnRenderFull");
+const btnAlertOK = document.querySelector("#btnAlertOK");
 
 var vidSync;
 var numScrub = 0;
+var isScrubbing = false;
+var startedAt = 0;
 
 function init() {
     noscript.style.display = "none";
@@ -41,28 +51,41 @@ function init() {
     outResolution.addEventListener("change", updateOutResolution);
     videoList.addEventListener("change", changeVideo);
     frameBw.addEventListener("click", () => {
-        scrub(-1);
+        addScrub(-1);
     });
     frameFw.addEventListener("click", () => {
-        scrub(1);
+        addScrub(1);
     });
     const scrubKeyDown = (e) => {
         switch (e.key) {
             case "ArrowRight":
-                scrub(1);
+                addScrub(1);
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return false;
             case "ArrowLeft":
-                scrub(-1);
+                addScrub(-1);
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return false;
+            case "PageUp":
+                addScrub(25);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+                break;
+            case "PageDown":
+                addScrub(-25);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+                break;
             case " ":
                 if (video.paused) {
                     video.play()
                 } else {
                     video.pause();
+                    video.currentTime = startedAt;
                 }
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -75,22 +98,83 @@ function init() {
     btnPause.addEventListener("click", (e) => {
         video.pause();
     });
+    btnStop.addEventListener("click", () => {
+        video.pause();
+        video.currentTime = startedAt;
+    })
     vidProgress.addEventListener("input", () => {
         video.currentTime = video.duration * parseFloat(vidProgress.value) / 100;
+        startedAt = video.currentTime;
     });
     const updateSlider = (e) => {
         vidProgress.value = video.currentTime / video.duration * 100;
+        timestampLabel.innerText = utils.timestampToString(video.currentTime);
     };
     video.addEventListener("timeupdate", updateSlider);
     video.addEventListener("canplay", updateSlider);
     video.addEventListener("playing", updateSlider);
+    video.addEventListener("play", () => {
+        startedAt = video.currentTime;
+    });
     video.addEventListener("pause", updateSlider);
     document.body.addEventListener("keydown", scrubKeyDown);
     document.querySelector("#clickCatcher").addEventListener("keydown", scrubKeyDown);
-    btnSetSyncPoint.addEventListener("click", setSyncPoint)
+    btnSetSyncPoint.addEventListener("click", setSyncPoint);
+    btnSetInPoint.addEventListener("click", setInPoint);
+    btnGotoSync.addEventListener("click", gotoSync);
+    btnGotoIn.addEventListener("click", gotoIn);
+    btnRenderFull.addEventListener("click", () => { render(); });
+    btnRenderTest.addEventListener("click", () => { render(10); });
+    btnAlertOK.addEventListener("click", hideAlert);
+    btnAlertOK.style.display = "";
 
     loadVidSync();
 }
+
+const utils = {
+    parseTimestamp: function (timestamp) {
+        var parts = timestamp.split(":");
+        if (parts.length > 0) {
+            var time = 0;
+            time += parseFloat(parts[parts.length - 1]);
+            if (parts.length >= 2) {
+                time += parseInt(parts[parts.length - 2]) * 60;
+                if (parts.length >= 3) {
+                    time += parseInt(parts[parts.length - 3]) * 60 * 60;
+                }
+            }
+            return time;
+        }
+        throw new Error("Incorrect timestamp format");
+    },
+    timestampToString: function (time) {
+        var isNeg = time < 0;
+        time = Math.abs(time);
+        var hours = Math.floor(time / 60.0 / 60.0);
+        time -= (hours * 60 * 60);
+        if (hours < 10) {
+            hours = "0" + hours;
+        } else {
+            hours = "" + hours;
+        }
+        var minutes = Math.floor(time / 60.0);
+        time -= (minutes * 60);
+        if (minutes < 10) {
+            minutes = "0" + minutes;
+        } else {
+            minutes = "" + minutes;
+        }
+        var seconds = time;
+        if (seconds < 10) {
+            seconds = "0" + seconds;
+        } else {
+            seconds = "" + seconds;
+        }
+        seconds = seconds.substr(0, 6);
+        return (isNeg ? "-" : "") + hours + ":" + minutes + ":" + seconds;
+    }
+}
+
 
 function loadVidSync() {
     const xhttp = new XMLHttpRequest();
@@ -115,10 +199,24 @@ function vidSnycUpdate(data) {
         voiceList.firstElementChild.remove();
     }
     vidSync = JSON.parse(data);
-    basePath.value = vidSync.basePath;
-    gridSizeX.value = vidSync.gridSize.x;
-    gridSizeY.value = vidSync.gridSize.y;
-    if (vidSync.outResolution == "none") {
+    if (vidSync.basePath) {
+        basePath.value = vidSync.basePath;
+    } else {
+        basePath.value = "";
+    }
+    if (vidSync.gridSize) {
+        gridSizeX.value = vidSync.gridSize.x;
+        gridSizeY.value = vidSync.gridSize.y;
+    } else {
+        gridSizeX.value = 1;
+        gridSizeY.value = 1;
+    }
+    if (vidSync.inToSyncTime) {
+        inToSync.value = vidSync.inToSyncTime;
+    } else {
+        inToSync.value = "";
+    }
+    if (!vidSync.outResolution || vidSync.outResolution == "none") {
         outResolution.value = "none";
     } else {
         const resolutionStr = vidSync.outResolution.x + "x" + vidSync.outResolution.y;
@@ -156,29 +254,39 @@ function changeVoice() {
     while (videoList.firstElementChild) {
         videoList.firstElementChild.remove();
     }
-    var voiceNum = parseInt(voiceList.value);
-    for (var i = 0; i < voiceNames.length; i++) {
-        voiceNames[i].innerText = vidSync.voices[voiceNum].name;
-    }
-    for (var vidNum = 0; vidNum < vidSync.voices[voiceNum].videos.length; vidNum++) {
-        const vid = vidSync.voices[voiceNum].videos[vidNum];
-        const video = document.createElement("option");
-        video.value = voiceNum + "." + vidNum;
-        video.innerText = vid.filename;
-        if (vid.audio) {
-            video.innerText += " + extra audio";
+    if (voiceList.value) {
+        var voiceNum = parseInt(voiceList.value);
+        if (isFinite(voiceNum) && vidSync.voices[voiceNum]) {
+            for (var i = 0; i < voiceNames.length; i++) {
+                voiceNames[i].innerText = vidSync.voices[voiceNum].name;
+            }
+            for (var vidNum = 0; vidNum < vidSync.voices[voiceNum].videos.length; vidNum++) {
+                const vid = vidSync.voices[voiceNum].videos[vidNum];
+                const video = document.createElement("option");
+                video.value = voiceNum + "." + vidNum;
+                video.innerText = vid.filename;
+                if (vid.audio) {
+                    video.innerText += " + extra audio";
+                }
+                if (vid.syncPoint) {
+                    video.innerText += " (Sync: " + vid.syncPoint + ")";
+                }
+                videoList.appendChild(video);
+            }
         }
-        if (vid.syncPoint) {
-            video.innerText += " (Sync: " + vid.syncPoint + ")";
-        }
-        videoList.appendChild(video);
     }
 }
 
-function scrub(amount) {
+function addScrub(amount) {
+    numScrub += amount;
+    scrub();
+}
+
+function scrub() {
     if (video.readyState == 4 || video.readyState == 3) {
-        if (numScrub == 0) {
-            numScrub += amount;
+        if (!isScrubbing) {
+            isScrubbing = true;
+            const amount = numScrub;
             const currTime = video.currentTime;
             var dstTime = 0;
             if (vidSync.voices[video.voiceNum].videos[video.vidNum].fps) {
@@ -187,15 +295,17 @@ function scrub(amount) {
                 dstTime = currTime + amount / 25;
             }
             video.currentTime = dstTime;
-            video.play();
-            setTimeout(() => {
-                video.pause();
-                numScrub -= amount;
-                video.currentTime = dstTime;
-                if (numScrub != 0) {
-                    scrub(amount);
-                }
-            }, 80);
+            video.play().then(() => {
+                setTimeout(() => {
+                    video.pause();
+                    numScrub -= amount;
+                    video.currentTime = dstTime;
+                    isScrubbing = false;
+                    if (numScrub != 0) {
+                        scrub();
+                    }
+                }, 80);
+            });
         }
     } else {
         console.log("Video not loaded");
@@ -210,6 +320,42 @@ function setSyncPoint() {
     }
 }
 
+function setInPoint() {
+    if ((video.readyState == 4 || video.readyState == 3) && video.paused && isFinite(video.voiceNum) && isFinite(video.vidNum)) {
+        if (vidSync.voices[video.voiceNum].videos[video.vidNum].syncPoint) {
+            apiRequest("/setIn?" + video.voiceNum + "_" + video.vidNum + "_" + video.currentTime);
+        } else {
+            alert("You must first set a sync point for this video to set the in point");
+        }
+    } else {
+        alert("A video must be loaded and paused for the in point to be set");
+    }
+}
+
+function gotoSync() {
+    if ((video.readyState == 4 || video.readyState == 3) && isFinite(video.voiceNum) && isFinite(video.vidNum)) {
+        if (vidSync.voices[video.voiceNum].videos[video.vidNum].syncPoint) {
+            video.currentTime = utils.parseTimestamp(vidSync.voices[video.voiceNum].videos[video.vidNum].syncPoint);
+        } else {
+            alert("You must first set a sync point to skip to it");
+        }
+    } else {
+        alert("A video must be loaded to skip to the sync point");
+    }
+}
+
+function gotoIn() {
+    if ((video.readyState == 4 || video.readyState == 3) && isFinite(video.voiceNum) && isFinite(video.vidNum)) {
+        if (vidSync.voices[video.voiceNum].videos[video.vidNum].syncPoint && vidSync.inToSyncTime) {
+            video.currentTime = utils.parseTimestamp(vidSync.voices[video.voiceNum].videos[video.vidNum].syncPoint) - utils.parseTimestamp(vidSync.inToSyncTime);
+        } else {
+            alert("You must first set a sync and in point to skip to it");
+        }
+    } else {
+        alert("A video must be loaded to skip to the in point");
+    }
+}
+
 function changeVideo() {
     const parts = videoList.value.split(/\./g);
     if (parts.length == 2) {
@@ -221,6 +367,39 @@ function changeVideo() {
         video.src = "/videos/" + voiceNum + "/" + vidNum + "?" + Math.floor(Math.random() * 10000);
         video.voiceNum = voiceNum;
         video.vidNum = vidNum;
+    }
+}
+
+function render(length) {
+    var outFileName = prompt("Enter filename (without extension) for output file", "virtualChoir");
+    if (outFileName) {
+        if (!length) {
+            apiRequest("/render?all" + "_" + outFileName);
+        } else {
+            apiRequest("/render?" + length + "_" + outFileName);
+        }
+        alert("Render started. This might take a while. You will be notified once it is finished. Please don't change anything in the meantime.");
+        const renderStatusCheck = () => {
+            const xhttp = new XMLHttpRequest();
+            xhttp.onload = (e) => {
+                if (xhttp.status == 200) {
+                    var response = JSON.parse(xhttp.responseText);
+                    if (response.renderResult == 0) {
+                        alert("Rendering finished! You can continue working. Find the output file in the base Directory");
+                    } else if (response.renderResult != 1) {
+                        alert("Rendering failed! Check server output for error messages");
+                    } else {
+                        console.log("Rendering still going");
+                        setTimeout(renderStatusCheck, 500);
+                    }
+                } else {
+                    showAlert(xhttp.responseText);
+                }
+            }
+            xhttp.open("GET", "/api/renderStatus");
+            xhttp.send();
+        };
+        setTimeout(renderStatusCheck, 500);
     }
 }
 
@@ -282,8 +461,9 @@ function addVideo() {
 
 function remVideo() {
     if (voiceList.value && videoList.value) {
-        var voiceNum = parseInt(voiceList.value);
-        var vidNum = parseInt(voiceList.value);
+        var parts = videoList.value.split(/\./g);
+        var voiceNum = parseInt(parts[0]);
+        var vidNum = parseInt(parts[1]);
         if (vidSync.voices[voiceNum] && vidSync.voices[voiceNum].videos[vidNum]) {
             if (confirm("Video " + vidSync.voices[voiceNum].videos[vidNum].filename + " will be unlinked. Continue?")) {
                 apiRequest("/remVideo?" + voiceNum + "." + vidNum);
@@ -331,4 +511,9 @@ function showAlert(text) {
     alertBox.innerHTML = text;
     main.style.display = "none";
     noscript.style.display = "";
+}
+
+function hideAlert() {
+    main.style.display = "";
+    noscript.style.display = "none";
 }

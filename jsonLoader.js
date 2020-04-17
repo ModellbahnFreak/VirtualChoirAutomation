@@ -11,7 +11,13 @@ class JSONLoader {
 
     get data() {
         if (!this.jsonData) {
-            this.jsonData = JSON.parse(fs.readFileSync(this.file));
+            try {
+                this.jsonData = JSON.parse(fs.readFileSync(this.file));
+            } catch (e) {
+                this.jsonData = {
+                    "voices": []
+                }
+            }
         }
         return this.jsonData;
     }

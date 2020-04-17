@@ -1,8 +1,5 @@
 const SAVE_ON_EXIT = false;
 
-const fs = require("fs");
-const child_process = require("child_process");
-const utils = require("./util");
 const JSONLoader = require("./jsonLoader");
 const ffmpeg = require("./ffmpeg");
 const GUI = require("./gui");

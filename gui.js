@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const utils = require("./util");
+const ffmpeg = require("./ffmpeg");
 
 const mimeTypes = {
     "mp4": "video/mp4",
@@ -70,6 +71,10 @@ class GUI {
 
     port;
     json;
+    renderStatus = {
+        numRenders: 0,
+        renderResult: 0
+    };
 
     constructor(serverPort, jsonLoader, saveEverytime) {
         this.port = serverPort;
@@ -90,8 +95,9 @@ class GUI {
             if (req.url.startsWith("/api")) {
                 const url = new URL(req.url.substr(4), "http://${req.headers.host}");
                 if (self.apiResponses[url.pathname]) {
-                    self.apiResponses[url.pathname].apply(self, [url, res, saveEverytime]);
-                    sendJsonResponse(res);
+                    if (self.apiResponses[url.pathname].apply(self, [url, res, saveEverytime])) {
+                        sendJsonResponse(res);
+                    }
                 } else {
                     res.statusCode = 404;
                     res.end("Unknown api call to " + req.url + "");
@@ -192,12 +198,14 @@ class GUI {
             if (save) {
                 this.json.save();
             }
+            return true;
         },
         "/remVoice": (url, res, save) => {
-            this.json.data.voices.splice(parseInt(url.search.substr(1)));
+            this.json.data.voices.splice(parseInt(url.search.substr(1)), 1);
             if (save) {
                 this.json.save();
             }
+            return true;
         },
         "/newVideo": (url, res, save) => {
             const pointPos = url.search.indexOf(".");
@@ -205,27 +213,35 @@ class GUI {
             const filename = decodeURIComponent(url.search).substr(pointPos + 1);
             console.log(voiceNum + "; " + filename);
             if (isFinite(voiceNum) && filename && this.json.data.voices[voiceNum]) {
-                this.json.data.voices[voiceNum].videos.push({
+                var newVid = {
                     "filename": filename,
-                    "syncPoint": this.json.data.inToSyncTime
-                });
+                    "flags": {},
+                    /*"syncPoint": this.json.data.inToSyncTime*/
+                };
+                if (mimeTypes[filename.split(".").pop().toLowerCase()].includes("audio")) {
+                    newVid.flags.mainIsAudio = true;
+                }
+                this.json.data.voices[voiceNum].videos.push(newVid);
                 if (save) {
                     this.json.save();
                 }
             }
+            return true;
         },
         "/remVideo": (url, res, save) => {
             const parts = url.search.substr(1).split(/\./g);
-            this.json.data.voices[parseInt(parts[0])].videos.splice(parseInt(parts[1]));
+            this.json.data.voices[parseInt(parts[0])].videos.splice(parseInt(parts[1]), 1);
             if (save) {
                 this.json.save();
             }
+            return true;
         },
         "/changeBasePath": (url, res, save) => {
             this.json.data.basePath = decodeURIComponent(url.search).substr(1).replace(/\\/g, "/").replace(/\/$/g, "");
             if (save) {
                 this.json.save();
             }
+            return true;
         },
         "/changeGridSize": (url, res, save) => {
             if (url.search == "?none") {
@@ -246,6 +262,7 @@ class GUI {
             if (save) {
                 this.json.save();
             }
+            return true;
         },
         "/changeOutResolution": (url, res, save) => {
             if (url.search == "?none") {
@@ -266,13 +283,11 @@ class GUI {
             if (save) {
                 this.json.save();
             }
+            return true;
         },
-        "setSync": (url, res, save) => {
+        "/setSync": (url, res, save) => {
             const syncData = url.search.substr(1).split("_");
             if (syncData.length == 3) {
-                syncData[0] = parseInt(syncData[0]);
-                syncData[1] = parseInt(syncData[1]);
-                syncData[2] = parseFloat(syncData[2]);
                 var conditionsMet = true;
                 for (var i = 0; i < syncData.length; i++) {
                     syncData[i] = parseFloat(syncData[i]);
@@ -287,9 +302,95 @@ class GUI {
             if (save) {
                 this.json.save();
             }
+            return true;
+        },
+        "/setIn": (url, res, save) => {
+            const syncData = url.search.substr(1).split("_");
+            if (syncData.length == 3) {
+                var conditionsMet = true;
+                for (var i = 0; i < syncData.length; i++) {
+                    syncData[i] = parseFloat(syncData[i]);
+                    if (!isFinite(syncData[i]) || syncData[i] < 0) {
+                        conditionsMet = false;
+                    }
+                }
+                if (conditionsMet && this.json.data.voices[syncData[0]] && this.json.data.voices[syncData[0]].videos[syncData[1]]) {
+                    if (this.json.data.voices[syncData[0]].videos[syncData[1]].syncPoint) {
+                        const syncTime = utils.parseTimestamp(this.json.data.voices[syncData[0]].videos[syncData[1]].syncPoint);
+                        const inToSync = syncTime - syncData[2];
+                        this.json.data.inToSyncTime = utils.timestampToString(inToSync);
+                    } else {
+                        res.statusCode = 400;
+                        res.end("You must first set a sync point for the video");
+                    }
+                }
+            }
+            if (save) {
+                this.json.save();
+            }
+            return true;
+        },
+        "/render": (url, res, save) => {
+            if (this.renderStatus.renderResult != 1) {
+                this.renderStatus.renderResult = 1;
+                this.renderStatus.numRenders++;
+                const dashPos = url.search.indexOf("_");
+                const length = url.search.substr(1, dashPos - 1);
+                const outFilename = url.search.substr(dashPos + 1);
+                if (!length || length == "all") {
+                    ffmpeg.createVideo(this.json.data, outFilename).then(() => {
+                        this.renderStatus.renderResult = 0;
+                    }).catch((e) => {
+                        this.renderStatus.renderResult = -1;
+                        console.error(e);
+                    });
+                } else {
+                    ffmpeg.createVideo(this.json.data, outFilename, utils.timestampToString(parseFloat(length))).then(() => {
+                        this.renderStatus.renderResult = 0;
+                    }).catch((e) => {
+                        this.renderStatus.renderResult = -1;
+                        console.error(e);
+                    });
+                }
+                return true;
+            } else {
+                res.statusCode = 400;
+                const data = "Already rendering";
+                res.setHeader("Content-Type", mimeTypes.txt);
+                res.setHeader("Content-Length", data.length);
+                res.end(data);
+                return false;
+            }
+        },
+        "/renderStatus": (url, res, save) => {
+            res.statusCode = 200;
+            const data = JSON.stringify(this.renderStatus);
+            res.setHeader("Content-Type", mimeTypes.json);
+            res.setHeader("Content-Length", data.length);
+            res.end(data);
+            return false;
+        },
+        "/setFlags": (url, res, save) => {
+            const parts = url.search.substr(1).split(/\./g);
+            if (parts.length == 3) {
+                const voiceNum = parseInt(parts[0]);
+                const vidNum = parseInt(parts[1]);
+                const newFlags = JSON.parse(decodeURIComponent(parts[2]));
+                if (newFlags && isFinite(voiceNum) && isFinite(vidNum) && this.json.data.voices[voiceNum] && this.json.data.voices[voiceNum].videos[vidNum]) {
+                    var vid = this.json.data.voices[voiceNum].videos[vidNum];
+                    if (!vid.flags) {
+                        vid.flags = {};
+                    }
+                    vid.flags = { ...vid.flags, ...newFlags };
+                }
+            }
+            if (save) {
+                this.json.save();
+            }
+            return true;
         },
         "/vidSync.json": (url, res, save) => {
-
+            return true;
         },
     };
 }
