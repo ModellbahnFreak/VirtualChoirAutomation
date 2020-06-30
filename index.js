@@ -4,6 +4,16 @@ const JSONLoader = require("./jsonLoader");
 const ffmpeg = require("./ffmpeg");
 const GUI = require("./gui");
 
+/**
+ * Note: A file projects.json is needed. 
+ * Content:
+ * {
+    "paths": [
+        "[PATH_TO_PROJECT]"
+    ]
+}
+ */
+
 const projects = new JSONLoader("./projects.json");
 var filePath = "./vidSync.json";
 if (projects.data["paths"] && projects.data["paths"][0]) {
