@@ -28,8 +28,8 @@ class JSONLoader {
     }
 
     save() {
-        fs.writeFile(this.file, JSON.stringify(this.jsonData, null, 4), () => {
-            console.log("Updated json file");
+        fs.writeFile(this.file, JSON.stringify(this.jsonData, null, 4), (e) => {
+            console.log("Updated json file ", e);
         });
     }
 
