@@ -240,7 +240,11 @@ function vidSnycUpdate(data) {
         const voice = vidSync.voices[voiceNum];
         const voiceGroup = document.createElement("option");
         voiceGroup.value = voiceNum;
-        voiceGroup.innerText = voice.name;
+        voiceGroup.innerText = voice.name + " (" + voice.position;
+        if (voice.volume) {
+            voiceGroup.innerText += "; vol: " + voice.volume;
+        }
+        voiceGroup.innerText += ")";
         voiceList.appendChild(voiceGroup);
         if ((oldSelected && voice.name == oldSelected) || (!oldSelected && voiceNum == 0)) {
             voiceGroup.selected = true;
