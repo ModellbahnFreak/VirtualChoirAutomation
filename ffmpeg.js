@@ -17,14 +17,14 @@ module.exports = {
             var audioMerge = "";
             var voiceMerger = [];
             if (!vidSync.outResolution) {
-                ffmpegOptions.push("color=black:s=" + vidSync.outResolution.x + "x" + vidSync.outResolution.y);
+                ffmpegOptions.push("color=black:s=1920x1080");
                 outputOptions.push("-vn", vidSync.basePath + "/" + outFileName + ".mp3");
                 outFileName = outFileName + ".mp3";
             } else {
-                ffmpegOptions.push("color=black:s=1920x1080");
+                ffmpegOptions.push("color=black:s=" + vidSync.outResolution.x + "x" + vidSync.outResolution.y);
                 outputOptions.push("-r", "25", vidSync.basePath + "/" + outFileName + ".mp4");
-                filterScale.push("[0:v] null [base]");
                 outFileName = outFileName + ".mp4";
+                filterScale.push("[0:v] null [base]");
                 //filterScale.push("nullsrc=size=" + vidSync.outResolution.x + "x" + vidSync.outResolution.y + " [base]");
             }
 
@@ -52,7 +52,7 @@ module.exports = {
                             audioInputs.push(utils.timestampToString(audioStartTime));
                             audioInputs.push("-i");
                             audioInputs.push(vidSync.basePath + "/" + voice.name + "/" + vid.audio.filename);
-                            numAudios++;
+                            //numAudios++;
                         }
                     } else {
                         unusedVideos++;
@@ -68,16 +68,19 @@ module.exports = {
                 x: 0,
                 y: 0
             };
-            if (vidSync.gridSize) {
-                gridSize.x = vidSync.gridSize.x;
-                gridSize.y = vidSync.gridSize.y;
-            } else {
-                gridSize.x = gridSize.y = Math.ceil(Math.sqrt(numVids));
+            if (!!vidSync.outResolution) {
+                if (vidSync.gridSize) {
+                    gridSize.x = vidSync.gridSize.x;
+                    gridSize.y = vidSync.gridSize.y;
+                } else {
+                    gridSize.x = gridSize.y = Math.ceil(Math.sqrt(numVids));
+                }
+                scaleTo.x = vidSync.outResolution.x / gridSize.x;
+                scaleTo.y = vidSync.outResolution.y / gridSize.y;
             }
-            scaleTo.x = vidSync.outResolution.x / gridSize.x;
-            scaleTo.y = vidSync.outResolution.y / gridSize.y;
 
             var i = 0;
+            var audioOnly = 0;
             vidSync.voices.forEach(voice => {
                 voiceMerger.push("");
                 var usedVideosVoice = 0;
@@ -120,9 +123,10 @@ module.exports = {
                                     passthrough = "[tmp" + (i - 1) + "] null [tmp" + i + "]";
                                 }
                                 filterOverlay.push(passthrough);
+                                audioOnly++;
                             } else {
-                                const vidCol = i % gridSize.x;
-                                const vidRow = Math.floor(i / gridSize.x);
+                                const vidCol = (i - audioOnly) % gridSize.x;
+                                const vidRow = Math.floor((i - audioOnly) / gridSize.x);
                                 filterScale.push("[" + (i + 1) + ":v] setpts=PTS-STARTPTS, scale=w=" + scaleTo.x + ":h=" + scaleTo.y + ":force_original_aspect_ratio=decrease [vid" + i + "]");
                                 var singleOverlayFilter = "overlay=shortest=0:x=" + vidCol * scaleTo.x + "+(" + scaleTo.x + "-overlay_w)/2:y=" + vidRow * scaleTo.y + "+(" + scaleTo.y + "-overlay_h)/2";
                                 if (i == 0) {
@@ -139,7 +143,11 @@ module.exports = {
                         usedVideosVoice++;
                     }
                 });
-                voiceMerger[voiceMerger.length - 1] += " amix=inputs=" + usedVideosVoice + " [voice" + voice.name + "]";
+                voiceMerger[voiceMerger.length - 1] += " amix=inputs=" + usedVideosVoice + ", loudnorm";
+                if (voice.volume) {
+                    voiceMerger[voiceMerger.length - 1] += " , volume=" + voice.volume;
+                }
+                voiceMerger[voiceMerger.length - 1] += " [voice" + voice.name + "]";
                 audioMerge += "[voice" + voice.name + "]";
             });
             audioMerge += " amix=inputs=" + vidSync.voices.length + "";
