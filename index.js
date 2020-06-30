@@ -4,8 +4,14 @@ const JSONLoader = require("./jsonLoader");
 const ffmpeg = require("./ffmpeg");
 const GUI = require("./gui");
 
-const loader = new JSONLoader("./vidSync.json");
-const gui = new GUI(8080, loader, !SAVE_ON_EXIT);
+const projects = new JSONLoader("./projects.json");
+var filePath = "./vidSync.json";
+if (projects.data["paths"] && projects.data["paths"][0]) {
+    filePath = projects.data["paths"][0];
+}
+console.log("Loading project " + filePath);
+const loader = new JSONLoader(filePath);
+const gui = new GUI(8081, loader, !SAVE_ON_EXIT);
 //ffmpeg.createVideo(loader.data);
 var vidSync = loader.data;
 
